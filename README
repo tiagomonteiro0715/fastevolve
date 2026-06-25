@@ -1,0 +1,31 @@
+:: 1. Lock & sync deps
+uv sync
+
+:: 2. Init repo
+git init
+
+:: 3. Sanity check
+type .gitignore
+git status
+
+:: 4. Stage & commit
+git add .gitignore .python-version README README.md pyproject.toml uv.lock main.py fastevolve
+
+git status
+
+git config --global user.email "12345678+tiagomonteiro0715@users.noreply.github.com"
+
+git config --global user.name "tiagomonteiro0715"
+
+git commit -m "Initial commit: fastevolve with Rich telemetry"
+
+:: 5. Rename master -> main
+git branch -M main
+
+:: 6. Capture version into %ver% and tag
+for /f "tokens=*" %i in ('uv version --short') do set ver=%i
+git tag v%ver%
+
+:: 7. Wire up remote and push
+git remote add origin https://github.com/tiagomonteiro0715/fastevolve.git
+git push -u origin main --follow-tags --force

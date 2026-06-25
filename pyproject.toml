@@ -1,0 +1,45 @@
+[project]
+name = "fastevolve"
+version = "0.1.0"
+description = "Minimal open-source AlphaEvolve: LLM-driven program evolution with MAP-Elites islands, cascade evaluation, and a local Ollama ensemble."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Tiago Monteiro", email = "monteiro.t@northeastern.edu" }]
+keywords = ["alphaevolve", "evolutionary-search", "llm", "ollama", "map-elites", "program-synthesis"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "ollama>=0.4.0",
+    "rich>=13.7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.scripts]
+fastevolve-demo = "main:main"
+
+[project.urls]
+Homepage = "https://github.com/tiagomonteiro/alpha_evolve_open_souce_version"
+Issues = "https://github.com/tiagomonteiro/alpha_evolve_open_souce_version/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["fastevolve"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
