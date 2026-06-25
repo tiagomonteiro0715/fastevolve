@@ -69,7 +69,7 @@ cfg = Config()
 cfg.iterations = 20
 cfg.checkpoint_path = "run.log"   # optional — resume if killed mid-run
 cfg.ensemble.models = [
-    ModelConfig(name="gemma3:e4b", provider="ollama", temperature=0.7, weight=1.0, role="fast"),
+    ModelConfig(name="gemma4:e4b", provider="ollama", temperature=0.7, weight=1.0, role="fast"),
 ]
 cfg.evaluator.cascade = [(correctness, 0.0)]
 
@@ -195,7 +195,7 @@ Start Ollama and pull the model first:
 
 ```bash
 ollama serve
-ollama pull gemma3:e4b
+ollama pull gemma4:e4b
 ```
 
 Then:
@@ -221,7 +221,7 @@ Then pick a `provider` per model in your config. You can freely mix providers in
 from fastevolve.llm_ensemble import ModelConfig
 
 cfg.ensemble.models = [
-    ModelConfig(name="gemma3:e4b", provider="ollama", temperature=0.6, weight=1.0, role="fast"),
+    ModelConfig(name="gemma4:e4b", provider="ollama", temperature=0.6, weight=1.0, role="fast"),
     ModelConfig(name="gpt-4o-mini", provider="openai", temperature=0.6, weight=1.0, role="fast"),
     ModelConfig(name="claude-opus-4-7", provider="anthropic", temperature=0.7, weight=1.0,
                 role="deep", options={"max_tokens": 4096}),

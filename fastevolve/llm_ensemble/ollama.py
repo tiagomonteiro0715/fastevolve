@@ -1,4 +1,5 @@
 import os
+import platform
 import shutil
 import subprocess
 import time
@@ -20,6 +21,34 @@ def _gpu_available() -> bool:
         return False
 
 
+@cache
+def _hardware_info() -> str:
+    if _gpu_available():
+        try:
+            r = subprocess.run(
+                ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+                capture_output=True, text=True, timeout=2,
+            )
+            gpus = [g.strip() for g in r.stdout.strip().splitlines() if g.strip()]
+            if gpus:
+                tag = f"{gpus[0]}" + (f" ×{len(gpus)}" if len(gpus) > 1 else "")
+                return f"GPU: [bold green]{tag}[/]"
+        except Exception:
+            pass
+        return "GPU: [bold green]detected[/]"
+    cpu = platform.processor() or ""
+    if not cpu and os.path.exists("/proc/cpuinfo"):
+        try:
+            with open("/proc/cpuinfo") as f:
+                for line in f:
+                    if line.startswith("model name"):
+                        cpu = line.split(":", 1)[1].strip()
+                        break
+        except Exception:
+            pass
+    return f"CPU: [bold yellow]{cpu or 'unknown'}[/] ({os.cpu_count() or '?'} cores)"
+
+
 def start_ollama(host: str = "127.0.0.1:11434", *, wait: float = 5.0) -> None:
     """Start an ollama daemon with GPU-aware optimizations. No-op if one is already running."""
     for prefix in ("http://", "https://"):
@@ -39,9 +68,9 @@ def start_ollama(host: str = "127.0.0.1:11434", *, wait: float = 5.0) -> None:
         env.setdefault("OLLAMA_KV_CACHE_TYPE", "q8_0")
         env.setdefault("OLLAMA_NUM_PARALLEL", "4")
         env.setdefault("OLLAMA_MAX_LOADED_MODELS", "2")
-        log.info("[ollama] starting server in [bold]GPU[/] mode (flash_attn, q8_0 kv-cache, parallel=4, max_loaded=2)")
+        log.info("[ollama] starting server | %s | flash_attn, q8_0 kv-cache, parallel=4, max_loaded=2", _hardware_info())
     else:
-        log.info("[ollama] starting server in [bold]CPU[/] mode")
+        log.info("[ollama] starting server | %s", _hardware_info())
 
     path = shutil.which("ollama") or "/usr/local/bin/ollama"
     subprocess.Popen([path, "serve"], env=env,
@@ -60,7 +89,7 @@ class OllamaLLM(BaseLLM):
         except Exception:
             start_ollama(host=host)
             self.client = Client(host=host, timeout=timeout)
-        log.info("[ollama] %s → [bold]%s[/] mode", self.cfg.name, "GPU" if self._gpu else "CPU")
+        log.info("[ollama] %s | %s", self.cfg.name, _hardware_info())
         self._ensure_model()
 
     def _ensure_model(self):
