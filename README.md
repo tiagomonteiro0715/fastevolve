@@ -4,19 +4,46 @@ Minimal open-source AlphaEvolve: LLM-driven program evolution with MAP-Elites is
 
 ## Install
 
+### 1. Install uv (one-time)
+
+uv is a fast Python package manager. Pick the line for your OS:
+
 ```bash
-uv sync
+# macOS / Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Windows (PowerShell)
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-The core install ships with Ollama support only. OpenAI and Anthropic SDKs are optional extras — install whichever you need:
+Or via Homebrew (`brew install uv`), pipx (`pipx install uv`), or pip (`pip install uv`).
+
+### 2. Add fastevolve to a new project
 
 ```bash
-uv sync --extra openai       # adds the OpenAI SDK
-uv sync --extra anthropic    # adds the Anthropic SDK
-uv sync --extra all          # both
+uv init my-evolve-project
+cd my-evolve-project
+uv add fastevolve
+```
+
+OpenAI and Anthropic SDKs are optional extras — install whichever you need:
+
+```bash
+uv add "fastevolve[openai]"       # adds the OpenAI SDK
+uv add "fastevolve[anthropic]"    # adds the Anthropic SDK
+uv add "fastevolve[all]"          # both
 ```
 
 If you only use Ollama, skip the extras — neither SDK will be imported.
+
+### 3. Or clone this repo and sync
+
+```bash
+git clone https://github.com/tiagomonteiro0715/fastevolve.git
+cd fastevolve
+uv sync                       # core
+uv sync --extra all           # core + OpenAI + Anthropic
+```
 
 ## Quick start in code
 
