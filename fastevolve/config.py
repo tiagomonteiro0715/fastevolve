@@ -12,3 +12,4 @@ class Config:
     evaluator: EvaluatorConfig = field(default_factory=EvaluatorConfig)
     database: DatabaseConfig = field(default_factory=DatabaseConfig)
     iterations: int = 100
+    checkpoint_path: str | None = None

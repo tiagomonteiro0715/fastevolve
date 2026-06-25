@@ -5,6 +5,7 @@ from typing import List, Literal
 @dataclass(kw_only=True)
 class ModelConfig:
     name: str
+    provider: Literal["ollama", "openai", "anthropic"] = "ollama"
     temperature: float = 0.7
     weight: float = 1.0
     role: Literal["fast", "deep"] = "fast"

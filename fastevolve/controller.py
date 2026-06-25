@@ -1,3 +1,4 @@
+import itertools
 import re
 from dataclasses import dataclass, field
 from typing import Optional
@@ -7,11 +8,13 @@ from rich.progress import (
     TimeElapsedColumn, TimeRemainingColumn,
 )
 
+from .checkpoint import Checkpointer
 from .config import Config
 from .prompt_sampler import PromptSampler, TemplateLibrary
 from .llm_ensemble import LLMEnsemble
 from .evaluator import Evaluator
 from .program_database import ProgramDatabase, Program
+from .program_database import program as _program
 from .telemetry import setup, span, timings, log
 
 
@@ -39,9 +42,22 @@ class Controller:
         self.sampler = PromptSampler(config.prompt, library=lib)
         self.ensemble = LLMEnsemble(config.ensemble, system_prompts=lib.system_prompts)
         self.evaluator = Evaluator(config.evaluator)
+        self.checkpoint = Checkpointer(config.checkpoint_path)
+        records = self.checkpoint.load()
         self.database = ProgramDatabase(config.database)
-        seed = self.database.seed(initial_program)
-        self.database.add(seed, self.evaluator.execute(seed))
+        if records:
+            for prog, res in records:
+                self.database.add(prog, res)
+            _program._ids = itertools.count(max(self.database.by_id, default=-1) + 1)
+            self._start = max(0, len(records) - 1)
+            log.info("resumed: [bold]%d[/] records replayed (population=%d)",
+                     len(records), len(self.database.by_id))
+        else:
+            seed = self.database.seed(initial_program)
+            seed_result = self.evaluator.execute(seed)
+            self.database.add(seed, seed_result)
+            self.checkpoint.append((seed, seed_result))
+            self._start = 0
 
     def run(self) -> RunResult:
         best: Optional[Program] = None
@@ -54,8 +70,9 @@ class Controller:
             TimeElapsedColumn(), TimeRemainingColumn(),
         ]
         with Progress(*cols, transient=False) as prog:
-            task = prog.add_task("run", total=self.config.iterations, stage="init", fit=0.0, best=0.0)
-            for _ in range(self.config.iterations):
+            task = prog.add_task("run", total=self.config.iterations, completed=self._start,
+                                 stage="init", fit=0.0, best=0.0)
+            for step in range(self._start, self.config.iterations):
                 prog.update(task, stage="sample")
                 with span("sample"):
                     parent, insp = self.database.sample()
@@ -76,6 +93,8 @@ class Controller:
                     best = child
                 prog.update(task, advance=1, fit=child.fitness,
                             best=best.fitness if best else 0.0)
+                self.checkpoint.append((child, result))
+        self.checkpoint.close()
         t = timings()
         log.info("done. population=%d best=%.3f", len(self.database.by_id),
                  best.fitness if best else 0.0)
