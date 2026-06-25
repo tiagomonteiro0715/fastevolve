@@ -1,6 +1,6 @@
 [project]
 name = "fastevolve"
-version = "0.3.2"
+version = "0.3.3"
 description = "Minimal open-source AlphaEvolve: LLM-driven program evolution with MAP-Elites islands, cascade evaluation, and a local Ollama ensemble."
 readme = "README.md"
 requires-python = ">=3.12"

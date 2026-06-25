@@ -149,22 +149,19 @@ print(result.best.code)
 
 ### Google Colab (with Ollama)
 
-Ollama can run on Colab if you install it, start the daemon in the background, and pull a small model. Use a GPU runtime (`Runtime → Change runtime type → T4 GPU`) for any model bigger than ~1B parameters.
+Ollama can run on Colab if you install it, start the daemon in the background, and pull a model. Tested working on the free CPU runtime with a tiny model (`qwen2.5:0.5b`).
+
+**On Colab Pro / Pro+**: switch to an A100 or L4 GPU runtime (`Runtime → Change runtime type → A100 GPU`) and swap the model for something bigger — `qwen2.5-coder:7b`, `llama3.1:8b`, or `gemma2:9b` all fit comfortably and produce dramatically better evolution candidates than `0.5b`. Pro+'s longer sessions (24 h) and background execution also mean you can leave a 1000-iteration run going overnight without keeping the tab open.
 
 ```python
-# 1. Install ollama and fastevolve
+# 1. Install ollama (zstd is required by the install script) and fastevolve via uv
+!apt-get -qq install -y zstd
 !curl -fsSL https://ollama.com/install.sh | sh
-!pip install -q fastevolve
+!pip install uv
+!uv pip install -q fastevolve
 
-# 2. Start the ollama daemon in the background
-import subprocess, time
-subprocess.Popen(["ollama", "serve"])
-time.sleep(5)  # give it a moment to bind to port 11434
-
-# 3. Pull a small model (qwen2.5:0.5b is ~400 MB and fits the free CPU runtime)
-!ollama pull qwen2.5:0.5b
-
-# 4. Run fastevolve as usual
+# 2. Run fastevolve — it starts the ollama daemon automatically with GPU-aware
+#    optimizations (flash attention, q8_0 KV cache, parallel decoding) when a GPU is detected.
 from fastevolve import Config, Controller
 from fastevolve.llm_ensemble import ModelConfig
 
