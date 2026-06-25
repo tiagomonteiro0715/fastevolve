@@ -6,6 +6,7 @@ dist/
 wheels/
 *.egg-info
 local_instructions.txt
+release.bat
 
 # Virtual environments
 .venv
