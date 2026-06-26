@@ -16,7 +16,8 @@ def setup() -> None:
     level = logging.WARNING if os.getenv("FASTEVOLVE_QUIET") else logging.INFO
     logging.basicConfig(
         level=level, format="%(message)s", datefmt="[%X]",
-        handlers=[RichHandler(rich_tracebacks=True, show_path=False, markup=True)],
+        handlers=[RichHandler(rich_tracebacks=True, tracebacks_show_locals=True,
+                              show_path=False, markup=True)],
     )
 
 

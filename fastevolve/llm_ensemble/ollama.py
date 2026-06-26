@@ -7,6 +7,7 @@ from functools import cache
 
 from ollama import Client, ResponseError
 
+from ..exceptions import LLMError
 from ..telemetry import log
 from .base import BaseLLM
 
@@ -102,14 +103,15 @@ class OllamaLLM(BaseLLM):
     def generate(self, prompt: str) -> str:
         try:
             return self._generate(prompt)
-        except Exception:
+        except Exception as e:
             log.exception("ollama generate failed for model=%s", self.cfg.name)
-            raise
+            raise LLMError(f"ollama:{self.cfg.name}") from e
 
     def _options(self) -> dict:
         opts = {
             "temperature": self.cfg.temperature,
             "num_ctx": self.cfg.num_ctx,
+            "num_predict": self.cfg.max_tokens,
             "flash_attn": self.cfg.flash_attention and self._gpu,
             "num_gpu": -1 if self._gpu else 0,
             "num_thread": 0 if self._gpu else (os.cpu_count() or 4),

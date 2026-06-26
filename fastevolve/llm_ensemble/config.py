@@ -10,6 +10,7 @@ class ModelConfig:
     weight: float = 1.0
     role: Literal["fast", "deep"] = "fast"
     num_ctx: int = 4096
+    max_tokens: int = 1024
     flash_attention: bool = True
     options: dict = field(default_factory=dict)
 

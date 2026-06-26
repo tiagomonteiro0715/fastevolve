@@ -13,6 +13,7 @@ class ProgramDatabase:
         self.heap: list[tuple[float, int]] = []
         self.migrations = [deque(maxlen=config.migration_size) for _ in range(config.num_islands)]
         self.embedder = CodeEmbedder()
+        self.activity: list[float] = [1.0] * config.num_islands
         self.step = 0
 
     def _cell(self, behavior):
@@ -32,9 +33,12 @@ class ProgramDatabase:
         child_program.fitness = results.fitness
         child_program.behavior = results.behavior
         cell = self._cell(results.behavior)
-        grid = self.islands[child_program.island % self.config.num_islands]
+        island_idx = child_program.island % self.config.num_islands
+        grid = self.islands[island_idx]
         if cell not in grid or grid[cell].fitness < child_program.fitness:
             grid[cell] = child_program
+            self.activity[island_idx] += 1.0
+        self.activity = [a * 0.99 for a in self.activity]
         self.by_id[child_program.id] = child_program
         heapq.heappush(self.heap, (-child_program.fitness, child_program.id))
         self.embedder.add(self.embedder.embed(child_program), child_program.id)
@@ -51,7 +55,8 @@ class ProgramDatabase:
     def sample(self):
         top = heapq.nsmallest(self.config.top_k, self.heap)
         live = [(f, pid) for f, pid in top if pid in self.by_id] or [(0.0, next(iter(self.by_id)))]
-        parent = self.by_id[random.choice(live)[1]]
+        weights = [self.activity[self.by_id[pid].island % self.config.num_islands] for _, pid in live]
+        parent = self.by_id[random.choices(live, weights=weights, k=1)[0][1]]
         ids = self.embedder.nearest(self.embedder.embed(parent), k=self.config.num_inspirations + 1)
         insp = [self.by_id[i] for i in ids if i != parent.id and i in self.by_id][: self.config.num_inspirations]
         return parent, insp

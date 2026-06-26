@@ -1,3 +1,4 @@
+import hashlib
 import itertools
 import re
 from dataclasses import dataclass, field
@@ -58,6 +59,7 @@ class Controller:
             self.database.add(seed, seed_result)
             self.checkpoint.append((seed, seed_result))
             self._start = 0
+        self._eval_cache: dict[str, object] = {}
 
     def run(self) -> RunResult:
         best: Optional[Program] = None
@@ -86,9 +88,15 @@ class Controller:
                     child = apply_diff(parent, diff)
                     child.island = parent.island
                 prog.update(task, stage="evaluate")
-                with span("evaluate"):
-                    result = self.evaluator.execute(child)
+                key = hashlib.sha256(child.code.encode()).hexdigest()
+                if key in self._eval_cache:
+                    result = self._eval_cache[key]
+                else:
+                    with span("evaluate"):
+                        result = self.evaluator.execute(child)
+                    self._eval_cache[key] = result
                 self.database.add(child, result)
+                self.ensemble.feedback(child.fitness > parent.fitness)
                 if best is None or child.fitness > best.fitness:
                     best = child
                 prog.update(task, advance=1, fit=child.fitness,

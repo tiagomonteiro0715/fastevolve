@@ -1,6 +1,6 @@
 from queue import PriorityQueue
 
-from ..telemetry import log
+from ..telemetry import log, span
 from .result import EvaluationResult
 
 
@@ -14,7 +14,8 @@ class Evaluator:
         for stage_fn, threshold in self.config.cascade:
             name = getattr(stage_fn, "__name__", f"stage{len(result.scores)}")
             try:
-                score = float(stage_fn(child_program))
+                with span(f"eval:{name}"):
+                    score = float(stage_fn(child_program))
             except Exception:
                 log.exception("evaluator stage [yellow]%s[/] raised on program %s", name, child_program.id)
                 return result

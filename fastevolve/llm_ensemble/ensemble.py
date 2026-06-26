@@ -22,9 +22,24 @@ class LLMEnsemble:
                                system_prompt=sp.get(m.name)) for m in config.models]
         if not self.llms:
             raise ValueError("EnsembleConfig.models is empty")
+        self._stats = [[1, 1] for _ in self.llms]  # [calls, wins] with Laplace prior
+        self._last = 0
+        self.epsilon = 0.1
 
     def select_model(self):
-        return random.choices(self.llms, weights=[m.cfg.weight for m in self.llms], k=1)[0]
+        if random.random() < self.epsilon or any(s[0] < 5 for s in self._stats):
+            self._last = random.choices(
+                range(len(self.llms)), weights=[m.cfg.weight for m in self.llms], k=1
+            )[0]
+        else:
+            self._last = max(range(len(self.llms)),
+                             key=lambda i: self._stats[i][1] / self._stats[i][0])
+        return self.llms[self._last]
 
     def generate(self, prompt: str) -> str:
         return self.select_model().generate(prompt)
+
+    def feedback(self, success: bool) -> None:
+        self._stats[self._last][0] += 1
+        if success:
+            self._stats[self._last][1] += 1
