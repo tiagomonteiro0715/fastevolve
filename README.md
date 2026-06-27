@@ -151,7 +151,7 @@ Ollama can run on Colab if you install it, start the daemon in the background, a
 
 ```python
 # 1. Install ollama (zstd is required by the install script) and fastevolve via uv
-!apt-get -qq install -y zstd
+!apt-get -qq install -y zstd pciutils lshw
 !curl -fsSL https://ollama.com/install.sh | sh
 !pip install uv
 !uv pip install -q fastevolve
