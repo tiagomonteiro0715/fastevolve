@@ -1,38 +1,33 @@
-import multiprocessing as mp
-from queue import Empty
+import json
+import subprocess
+import sys
 from typing import Any
 
 
-def _worker(code: str, fn_name: str, args: tuple, q) -> None:
-    try:
-        ns: dict = {}
-        exec(code, ns)
-        fn = ns.get(fn_name)
-        if not callable(fn):
-            q.put(("err", f"{fn_name!r} not defined or not callable"))
-            return
-        q.put(("ok", fn(*args)))
-    except Exception as e:
-        q.put(("err", repr(e)))
-
-
 def run_sandboxed(code: str, fn_name: str, *args, timeout: float = 5.0) -> Any:
-    """Execute `code` in a fresh process and call `fn_name(*args)`.
+    """Execute `code` in a fresh `python -c` subprocess and call `fn_name(*args)`.
 
-    Returns the function's value, or None on timeout / error / non-picklable result.
-    Kills runaway processes after `timeout` seconds.
+    Returns the function's value (must be JSON-serializable), or None on timeout,
+    crash, missing function, or unserializable result. Kills runaway processes
+    after `timeout` seconds.
+
+    Args must be JSON-serializable (int, float, str, list, dict, bool, None).
     """
-    ctx = mp.get_context()
-    q: Any = ctx.Queue()
-    p = ctx.Process(target=_worker, args=(code, fn_name, args, q), daemon=True)
-    p.start()
-    p.join(timeout)
-    if p.is_alive():
-        p.terminate()
-        p.join()
+    runner = (
+        f"import json,sys;ns={{}};exec({code!r},ns);"
+        f"fn=ns.get({fn_name!r});"
+        f"sys.exit(2) if not callable(fn) else print(json.dumps(fn(*{list(args)!r})))"
+    )
+    try:
+        r = subprocess.run(
+            [sys.executable, "-c", runner],
+            capture_output=True, timeout=timeout, text=True,
+        )
+    except subprocess.TimeoutExpired:
+        return None
+    if r.returncode != 0:
         return None
     try:
-        status, val = q.get_nowait()
-    except Empty:
+        return json.loads(r.stdout.strip())
+    except (json.JSONDecodeError, ValueError):
         return None
-    return val if status == "ok" else None

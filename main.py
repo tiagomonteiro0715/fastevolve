@@ -7,7 +7,7 @@ Run from the project root (where the `fastevolve/` package sits):
 from fastevolve import Config, Controller
 from fastevolve.llm_ensemble import ModelConfig
 
-MODEL = "gemma4:e4b"
+MODEL = "gemma4:e2b"
 
 INITIAL_PROGRAM = '''def solve(x):
     total = 0

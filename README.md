@@ -51,25 +51,25 @@ uv sync --extra all           # core + OpenAI + Anthropic
 
 Assumes `ollama serve` is running and you've pulled the model.
 
+The ensemble below mixes a **fast** model (low temperature, conservative) with a **deep** one (higher temperature, more exploration). The adaptive router learns over time when to call each. Evaluation is wrapped in `run_sandboxed`, which kills any program that loops forever or crashes — that iteration just scores zero instead of hanging the run.
+
 ```python
-from fastevolve import Config, Controller
+from fastevolve import Config, Controller, run_sandboxed
 from fastevolve.llm_ensemble import ModelConfig
 
 INITIAL = "def solve(x):\n    return x\n"
 
 def correctness(p):
-    ns = {}
-    try: exec(p.code, ns)
-    except Exception: return 0.0
-    fn = ns.get("solve")
     cases = [(2, 4), (3, 9), (4, 16), (5, 25)]
-    return sum(1 for x, y in cases if fn and fn(x) == y) / len(cases)
+    return sum(1 for x, y in cases
+               if run_sandboxed(p.code, "solve", x, timeout=2.0) == y) / len(cases)
 
 cfg = Config()
 cfg.iterations = 20
 cfg.checkpoint_path = "run.log"   # optional — resume if killed mid-run
 cfg.ensemble.models = [
-    ModelConfig(name="gemma4:e4b", provider="ollama", temperature=0.7, weight=1.0, role="fast"),
+    ModelConfig(name="gemma4:e2b", provider="ollama", temperature=0.4, weight=1.0, role="fast"),
+    ModelConfig(name="gemma4:e2b", provider="ollama", temperature=0.9, weight=0.5, role="deep"),
 ]
 cfg.evaluator.cascade = [(correctness, 0.0)]
 
@@ -88,23 +88,21 @@ import os
 from google.colab import userdata
 os.environ["OPENAI_API_KEY"] = userdata.get("OPENAI_API_KEY")  # store in Colab Secrets first
 
-from fastevolve import Config, Controller
+from fastevolve import Config, Controller, run_sandboxed
 from fastevolve.llm_ensemble import ModelConfig
 
 INITIAL = "def solve(x):\n    return x\n"
 
 def correctness(p):
-    ns = {}
-    try: exec(p.code, ns)
-    except Exception: return 0.0
-    fn = ns.get("solve")
     cases = [(2, 4), (3, 9), (4, 16), (5, 25)]
-    return sum(1 for x, y in cases if fn and fn(x) == y) / len(cases)
+    return sum(1 for x, y in cases
+               if run_sandboxed(p.code, "solve", x, timeout=2.0) == y) / len(cases)
 
 cfg = Config()
 cfg.iterations = 20
 cfg.ensemble.models = [
-    ModelConfig(name="gpt-4o-mini", provider="openai", temperature=0.7, weight=1.0, role="fast"),
+    ModelConfig(name="gpt-4o-mini", provider="openai", temperature=0.4, weight=1.0, role="fast"),
+    ModelConfig(name="gpt-4o",      provider="openai", temperature=0.7, weight=0.3, role="deep"),
 ]
 cfg.evaluator.cascade = [(correctness, 0.0)]
 
@@ -121,25 +119,23 @@ import os
 from google.colab import userdata
 os.environ["ANTHROPIC_API_KEY"] = userdata.get("ANTHROPIC_API_KEY")  # store in Colab Secrets first
 
-from fastevolve import Config, Controller
+from fastevolve import Config, Controller, run_sandboxed
 from fastevolve.llm_ensemble import ModelConfig
 
 INITIAL = "def solve(x):\n    return x\n"
 
 def correctness(p):
-    ns = {}
-    try: exec(p.code, ns)
-    except Exception: return 0.0
-    fn = ns.get("solve")
     cases = [(2, 4), (3, 9), (4, 16), (5, 25)]
-    return sum(1 for x, y in cases if fn and fn(x) == y) / len(cases)
+    return sum(1 for x, y in cases
+               if run_sandboxed(p.code, "solve", x, timeout=2.0) == y) / len(cases)
 
 cfg = Config()
 cfg.iterations = 20
 cfg.ensemble.models = [
     ModelConfig(name="claude-haiku-4-5-20251001", provider="anthropic",
-                temperature=0.7, weight=1.0, role="fast",
-                options={"max_tokens": 4096}),
+                temperature=0.4, weight=1.0, role="fast"),
+    ModelConfig(name="claude-opus-4-7",          provider="anthropic",
+                temperature=0.7, weight=0.3, role="deep"),
 ]
 cfg.evaluator.cascade = [(correctness, 0.0)]
 
@@ -162,24 +158,25 @@ Ollama can run on Colab if you install it, start the daemon in the background, a
 
 # 2. Run fastevolve — it starts the ollama daemon automatically with GPU-aware
 #    optimizations (flash attention, q8_0 KV cache, parallel decoding) when a GPU is detected.
-from fastevolve import Config, Controller
+from fastevolve import Config, Controller, run_sandboxed
 from fastevolve.llm_ensemble import ModelConfig
 
 INITIAL = "def solve(x):\n    return x\n"
 
 def correctness(p):
-    ns = {}
-    try: exec(p.code, ns)
-    except Exception: return 0.0
-    fn = ns.get("solve")
     cases = [(2, 4), (3, 9), (4, 16), (5, 25)]
-    return sum(1 for x, y in cases if fn and fn(x) == y) / len(cases)
+    return sum(1 for x, y in cases
+               if run_sandboxed(p.code, "solve", x, timeout=2.0) == y) / len(cases)
 
 cfg = Config()
 cfg.iterations = 20
 cfg.ensemble.models = [
-    ModelConfig(name="qwen2.5:0.5b", provider="ollama",
-                temperature=0.7, weight=1.0, role="fast"),
+    # free CPU runtime: only the small fast model
+    ModelConfig(name="qwen2.5:0.5b",       provider="ollama",
+                temperature=0.4, weight=1.0, role="fast"),
+    # Pro / Pro+ A100 or L4: add a stronger deep model — the router will escalate when needed
+    ModelConfig(name="qwen2.5-coder:7b",   provider="ollama",
+                temperature=0.7, weight=0.5, role="deep"),
 ]
 cfg.evaluator.cascade = [(correctness, 0.0)]
 
