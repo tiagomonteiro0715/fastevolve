@@ -204,7 +204,9 @@ vLLM is Linux-only (or Linux via WSL2). It does not work on Windows or macOS nat
 
 The library will log the detected vLLM version, driver CUDA, and GPU at startup so any mismatch surfaces immediately.
 
-The ensemble below runs **two different vLLM servers on the same GPU**: a small, fast Qwen for cheap exploration and a bigger Gemma for hard cases. The adaptive router learns when to escalate. Each vLLM server is told to use ~45 % of GPU memory so they coexist on a single A100 40 GB.
+The ensemble below runs **two different vLLM servers on the same GPU**: a small, fast Qwen for cheap exploration and a bigger Qwen-coder for hard cases. The adaptive router learns when to escalate. Each vLLM server is told to use ~40 % of GPU memory so they coexist on a single A100 40 GB.
+
+> **Gated models** (Llama, Gemma, Mistral large variants) require a Hugging Face token. Accept the license on the model's HF page, then set `os.environ["HF_TOKEN"] = userdata.get("HF_TOKEN")` *before* calling `start_vllm`. The example below uses Qwen models, which are openly licensed and don't need a token.
 
 ```python
 # 1. Pick an A100 / L4 / H100 GPU runtime: Runtime → Change runtime type → A100 GPU
@@ -212,15 +214,15 @@ The ensemble below runs **two different vLLM servers on the same GPU**: a small,
 !pip install -q "fastevolve[vllm]"
 
 # 3. Start two vLLM OpenAI-compatible servers on different ports.
-#    `gpu_memory_utilization=0.45` lets both fit on one 40 GB A100.
-#    `verbose=True` streams vLLM's own logs — useful on the first run because
-#    it downloads model weights from Hugging Face (5–30 min for big models).
-#    Drop `verbose=True` later to silence the noise once weights are cached.
+#    `gpu_memory_utilization=0.4` lets both fit on one 40 GB A100 with KV-cache headroom.
+#    `wait=600` allows time for first-run weight downloads from Hugging Face.
+#    `verbose=True` streams vLLM's own logs — strongly recommended on the first run
+#    so any OOM / auth / download issue surfaces immediately. Drop it once weights are cached.
 from fastevolve.llm_ensemble import start_vllm
 start_vllm("Qwen/Qwen2.5-Coder-1.5B-Instruct", port=8000,
-           gpu_memory_utilization=0.45, verbose=True)
-start_vllm("google/gemma-2-9b-it",             port=8001,
-           gpu_memory_utilization=0.45, verbose=True)
+           gpu_memory_utilization=0.4, wait=600, verbose=True)
+start_vllm("Qwen/Qwen2.5-Coder-7B-Instruct",  port=8001,
+           gpu_memory_utilization=0.4, wait=600, verbose=True)
 
 # 4. Run fastevolve — each ModelConfig points at one of the local servers via base_url
 from fastevolve import Config, Controller, run_sandboxed
@@ -254,8 +256,8 @@ cfg.ensemble.models = [
     ModelConfig(name="Qwen/Qwen2.5-Coder-1.5B-Instruct", provider="openai",
                 base_url="http://127.0.0.1:8000/v1",
                 temperature=0.4, weight=1.0, role="fast"),
-    # deep: bigger Gemma, higher temperature, lower weight — escalated by the router when fast stalls
-    ModelConfig(name="google/gemma-2-9b-it", provider="openai",
+    # deep: bigger Qwen-coder, higher temperature, lower weight — escalated by the router when fast stalls
+    ModelConfig(name="Qwen/Qwen2.5-Coder-7B-Instruct", provider="openai",
                 base_url="http://127.0.0.1:8001/v1",
                 temperature=0.8, weight=0.3, role="deep"),
 ]

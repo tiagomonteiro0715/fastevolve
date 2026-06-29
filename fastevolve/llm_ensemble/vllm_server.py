@@ -97,4 +97,13 @@ def start_vllm(model: str, *, host: str = "127.0.0.1", port: int = 8000,
                 log.info("[vllm] still initializing... [yellow]%.0fs elapsed[/] (set verbose=True for vLLM's own logs)", now - started)
                 last_log = now
             time.sleep(2)
-    log.warning("[vllm] server did not become ready in %.0fs — proceeding", wait)
+    raise RuntimeError(
+        f"vLLM server did not become ready on {host}:{port} within {wait:.0f}s. "
+        "Common causes:\n"
+        "  1. Gated model — accept the license on Hugging Face and set "
+        "os.environ['HF_TOKEN'] = '...' before calling start_vllm.\n"
+        "  2. Out-of-memory — gpu_memory_utilization too high for the model size, "
+        "or two servers are competing for the same GPU. Lower it (e.g. 0.4) or use a smaller model.\n"
+        "  3. Slow download — first-run weight download can exceed 180s. "
+        "Re-run with wait=600 (or longer) and verbose=True to see vLLM's own logs."
+    )
