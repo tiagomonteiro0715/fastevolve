@@ -226,12 +226,26 @@ start_vllm("google/gemma-2-9b-it",             port=8001,
 from fastevolve import Config, Controller, run_sandboxed
 from fastevolve.llm_ensemble import ModelConfig
 
-INITIAL = "def solve(x):\n    return x\n"
+# Task: parse a Roman numeral into an integer.
+# The seed handles pure addition (e.g. "III" = 3, "LVIII" = 58) but misses the
+# subtractive notation (e.g. "IV" = 4, "MCMXCIV" = 1994). The LLM has to spot
+# and add the subtraction rule. Harder than `x*x` — needs real reasoning, not
+# just curve-fitting to a few input/output pairs.
+INITIAL = '''def solve(s):
+    vals = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500, "M": 1000}
+    return sum(vals[c] for c in s)
+'''
+
+CASES = [
+    ("III", 3), ("VIII", 8), ("LVIII", 58),         # pure addition — seed already passes
+    ("IV", 4), ("IX", 9), ("XL", 40), ("XC", 90),   # simple subtraction
+    ("CDXLIV", 444), ("MCMXCIV", 1994),             # nested subtraction
+    ("MMXXIV", 2024), ("MMMCMXCIX", 3999),          # long-form
+]
 
 def correctness(p):
-    cases = [(2, 4), (3, 9), (4, 16), (5, 25)]
-    return sum(1 for x, y in cases
-               if run_sandboxed(p.code, "solve", x, timeout=2.0) == y) / len(cases)
+    return sum(1 for s, y in CASES
+               if run_sandboxed(p.code, "solve", s, timeout=2.0) == y) / len(CASES)
 
 cfg = Config()
 cfg.iterations = 50
