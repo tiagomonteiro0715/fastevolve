@@ -204,16 +204,20 @@ vLLM is Linux-only (or Linux via WSL2). It does not work on Windows or macOS nat
 
 The library will log the detected vLLM version, driver CUDA, and GPU at startup so any mismatch surfaces immediately.
 
+The ensemble below runs **two different vLLM servers on the same GPU**: a small, fast Qwen for cheap exploration and a bigger Gemma for hard cases. The adaptive router learns when to escalate. Each vLLM server is told to use ~45 % of GPU memory so they coexist on a single A100 40 GB.
+
 ```python
 # 1. Pick an A100 / L4 / H100 GPU runtime: Runtime → Change runtime type → A100 GPU
 # 2. Install fastevolve with the vLLM extra (works on Colab's CUDA 12.x out of the box)
 !pip install -q "fastevolve[vllm]"
 
-# 3. Start the vLLM OpenAI-compatible server (logs vLLM/CUDA/GPU on startup)
+# 3. Start two vLLM OpenAI-compatible servers on different ports.
+#    `gpu_memory_utilization=0.45` lets both fit on one 40 GB A100.
 from fastevolve.llm_ensemble import start_vllm
-start_vllm("Qwen/Qwen2.5-Coder-7B-Instruct")
+start_vllm("Qwen/Qwen2.5-Coder-1.5B-Instruct", port=8000, gpu_memory_utilization=0.45)
+start_vllm("google/gemma-2-9b-it",             port=8001, gpu_memory_utilization=0.45)
 
-# 4. Run fastevolve — vLLM is reached via the OpenAI adapter with a local base_url
+# 4. Run fastevolve — each ModelConfig points at one of the local servers via base_url
 from fastevolve import Config, Controller, run_sandboxed
 from fastevolve.llm_ensemble import ModelConfig
 
@@ -225,14 +229,16 @@ def correctness(p):
                if run_sandboxed(p.code, "solve", x, timeout=2.0) == y) / len(cases)
 
 cfg = Config()
-cfg.iterations = 20
+cfg.iterations = 50
 cfg.ensemble.models = [
-    ModelConfig(name="Qwen/Qwen2.5-Coder-7B-Instruct", provider="openai",
+    # fast: small Qwen, low temperature, high weight — dominates the cheap iterations
+    ModelConfig(name="Qwen/Qwen2.5-Coder-1.5B-Instruct", provider="openai",
                 base_url="http://127.0.0.1:8000/v1",
                 temperature=0.4, weight=1.0, role="fast"),
-    ModelConfig(name="Qwen/Qwen2.5-Coder-7B-Instruct", provider="openai",
-                base_url="http://127.0.0.1:8000/v1",
-                temperature=0.9, weight=0.5, role="deep"),
+    # deep: bigger Gemma, higher temperature, lower weight — escalated by the router when fast stalls
+    ModelConfig(name="google/gemma-2-9b-it", provider="openai",
+                base_url="http://127.0.0.1:8001/v1",
+                temperature=0.8, weight=0.3, role="deep"),
 ]
 cfg.evaluator.cascade = [(correctness, 0.0)]
 
@@ -240,7 +246,9 @@ result = Controller(cfg, initial_program=INITIAL).run()
 print(result.best.code)
 ```
 
-For multi-GPU runtimes, pass tensor-parallel size through to vLLM:
+You can mix any combination — a coding-specialized model as fast + a general reasoning model as deep, a small distilled model + a larger base model, etc. The router only cares which `ModelConfig` produces fitness improvements; it doesn't care about the architecture or vendor behind each `base_url`.
+
+For multi-GPU runtimes (two A100s, etc.), pass tensor-parallel size to put a single large model across both GPUs:
 
 ```python
 start_vllm("Qwen/Qwen2.5-Coder-32B-Instruct", tensor_parallel_size=2)
