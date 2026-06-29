@@ -1,3 +1,5 @@
+import os
+
 import httpx
 from openai import OpenAI
 
@@ -12,7 +14,11 @@ class OpenAILLM(BaseLLM):
     def __init__(self, model_config, *, system_prompt: str | None = None, **_):
         self.cfg = model_config
         self.system_prompt = system_prompt
-        self.client = OpenAI(http_client=_HTTP)
+        self.client = OpenAI(
+            api_key=os.getenv("OPENAI_API_KEY") or "EMPTY",
+            base_url=self.cfg.base_url,
+            http_client=_HTTP,
+        )
 
     def generate(self, prompt: str) -> str:
         try:

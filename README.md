@@ -186,6 +186,66 @@ print(result.best.code)
 
 Colab sessions are disconnected after ~90 min idle and the VM is wiped — set `cfg.checkpoint_path = "/content/drive/MyDrive/run.log"` after mounting Drive if you want resume across sessions.
 
+### Google Colab (with vLLM)
+
+vLLM is a high-throughput inference engine with continuous batching and paged attention — significantly faster than Ollama for sustained generation and multi-GPU setups. Use it when you have an A100 / L4 / H100 and care about throughput.
+
+**CUDA limitation (important).** vLLM ships pre-built wheels tied to specific CUDA versions and it is **impossible to make a single pin work for every GPU**. `fastevolve[vllm]` installs the PyPI default, which targets **CUDA 12.1** — this works on Colab Pro+ A100/L4 runtimes (currently CUDA 12.x) and most modern cloud GPUs. If your driver is on a different CUDA version, install vLLM yourself first with the matching wheel:
+
+```bash
+# Pick the line that matches your driver's CUDA version
+pip install vllm --extra-index-url https://download.pytorch.org/whl/cu118    # CUDA 11.8
+pip install vllm --extra-index-url https://download.pytorch.org/whl/cu124    # CUDA 12.4
+# then:
+uv add "fastevolve[vllm]"
+```
+
+vLLM is Linux-only (or Linux via WSL2). It does not work on Windows or macOS natively.
+
+The library will log the detected vLLM version, driver CUDA, and GPU at startup so any mismatch surfaces immediately.
+
+```python
+# 1. Pick an A100 / L4 / H100 GPU runtime: Runtime → Change runtime type → A100 GPU
+# 2. Install fastevolve with the vLLM extra (works on Colab's CUDA 12.x out of the box)
+!pip install -q "fastevolve[vllm]"
+
+# 3. Start the vLLM OpenAI-compatible server (logs vLLM/CUDA/GPU on startup)
+from fastevolve.llm_ensemble import start_vllm
+start_vllm("Qwen/Qwen2.5-Coder-7B-Instruct")
+
+# 4. Run fastevolve — vLLM is reached via the OpenAI adapter with a local base_url
+from fastevolve import Config, Controller, run_sandboxed
+from fastevolve.llm_ensemble import ModelConfig
+
+INITIAL = "def solve(x):\n    return x\n"
+
+def correctness(p):
+    cases = [(2, 4), (3, 9), (4, 16), (5, 25)]
+    return sum(1 for x, y in cases
+               if run_sandboxed(p.code, "solve", x, timeout=2.0) == y) / len(cases)
+
+cfg = Config()
+cfg.iterations = 20
+cfg.ensemble.models = [
+    ModelConfig(name="Qwen/Qwen2.5-Coder-7B-Instruct", provider="openai",
+                base_url="http://127.0.0.1:8000/v1",
+                temperature=0.4, weight=1.0, role="fast"),
+    ModelConfig(name="Qwen/Qwen2.5-Coder-7B-Instruct", provider="openai",
+                base_url="http://127.0.0.1:8000/v1",
+                temperature=0.9, weight=0.5, role="deep"),
+]
+cfg.evaluator.cascade = [(correctness, 0.0)]
+
+result = Controller(cfg, initial_program=INITIAL).run()
+print(result.best.code)
+```
+
+For multi-GPU runtimes, pass tensor-parallel size through to vLLM:
+
+```python
+start_vllm("Qwen/Qwen2.5-Coder-32B-Instruct", tensor_parallel_size=2)
+```
+
 ## Run the demo
 
 Start Ollama and pull the model first:

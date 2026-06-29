@@ -1,6 +1,6 @@
 [project]
 name = "fastevolve"
-version = "0.5.2"
+version = "0.6.0"
 description = "Minimal open-source AlphaEvolve: LLM-driven program evolution with MAP-Elites islands, cascade evaluation, and a local Ollama ensemble."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -23,7 +23,8 @@ dependencies = [
 dev = ["pytest>=8", "ruff>=0.6"]
 openai = ["openai>=1.0"]
 anthropic = ["anthropic>=0.30"]
-all = ["openai>=1.0", "anthropic>=0.30"]
+vllm = ["vllm>=0.6"]
+all = ["openai>=1.0", "anthropic>=0.30", "vllm>=0.6"]
 
 [project.scripts]
 fastevolve-demo = "main:main"

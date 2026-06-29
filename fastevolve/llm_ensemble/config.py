@@ -6,6 +6,7 @@ from typing import List, Literal
 class ModelConfig:
     name: str
     provider: Literal["ollama", "openai", "anthropic"] = "ollama"
+    base_url: str | None = None  # set for OpenAI-compatible endpoints (vLLM, LM Studio, etc.)
     temperature: float = 0.7
     weight: float = 1.0
     role: Literal["fast", "deep"] = "fast"
