@@ -49,12 +49,17 @@ def _port_open(host: str, port: int) -> bool:
 
 
 def start_vllm(model: str, *, host: str = "127.0.0.1", port: int = 8000,
-               wait: float = 180.0, **vllm_kwargs) -> None:
+               wait: float = 180.0, verbose: bool = False, **vllm_kwargs) -> None:
     """Spawn a vLLM OpenAI-compatible server in the background. Idempotent.
 
     Logs the detected vLLM version, driver CUDA, and GPU on startup so any
     CUDA-mismatch surfaces immediately. See module docstring for the
     CUDA-version limitation.
+
+    Set `verbose=True` to stream vLLM's own logs (weight download progress,
+    model loading, ready message). Useful for first-run model downloads,
+    which can take 5–30 minutes for large models. Default is quiet — we
+    still log a periodic "still initializing" heartbeat every 10s.
     """
     info = _vllm_info()
     if info["vllm_ver"] is None:
@@ -73,16 +78,23 @@ def start_vllm(model: str, *, host: str = "127.0.0.1", port: int = 8000,
            "--model", model, "--host", host, "--port", str(port)]
     for k, v in vllm_kwargs.items():
         cmd.extend([f"--{k.replace('_', '-')}", str(v)])
-    subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    out = None if verbose else subprocess.DEVNULL
+    subprocess.Popen(cmd, stdout=out, stderr=out)
 
-    deadline = time.time() + wait
+    started = time.time()
+    deadline = started + wait
+    last_log = started
     url = f"http://{host}:{port}/v1/models"
     while time.time() < deadline:
         try:
             with urllib.request.urlopen(url, timeout=2) as r:
                 if r.status == 200:
-                    log.info("[vllm] [bold green]ready[/] at %s", url)
+                    log.info("[vllm] [bold green]ready[/] at %s (took %.0fs)", url, time.time() - started)
                     return
         except Exception:
+            now = time.time()
+            if now - last_log >= 10:
+                log.info("[vllm] still initializing... [yellow]%.0fs elapsed[/] (set verbose=True for vLLM's own logs)", now - started)
+                last_log = now
             time.sleep(2)
     log.warning("[vllm] server did not become ready in %.0fs — proceeding", wait)

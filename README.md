@@ -213,9 +213,14 @@ The ensemble below runs **two different vLLM servers on the same GPU**: a small,
 
 # 3. Start two vLLM OpenAI-compatible servers on different ports.
 #    `gpu_memory_utilization=0.45` lets both fit on one 40 GB A100.
+#    `verbose=True` streams vLLM's own logs — useful on the first run because
+#    it downloads model weights from Hugging Face (5–30 min for big models).
+#    Drop `verbose=True` later to silence the noise once weights are cached.
 from fastevolve.llm_ensemble import start_vllm
-start_vllm("Qwen/Qwen2.5-Coder-1.5B-Instruct", port=8000, gpu_memory_utilization=0.45)
-start_vllm("google/gemma-2-9b-it",             port=8001, gpu_memory_utilization=0.45)
+start_vllm("Qwen/Qwen2.5-Coder-1.5B-Instruct", port=8000,
+           gpu_memory_utilization=0.45, verbose=True)
+start_vllm("google/gemma-2-9b-it",             port=8001,
+           gpu_memory_utilization=0.45, verbose=True)
 
 # 4. Run fastevolve — each ModelConfig points at one of the local servers via base_url
 from fastevolve import Config, Controller, run_sandboxed
@@ -253,6 +258,29 @@ For multi-GPU runtimes (two A100s, etc.), pass tensor-parallel size to put a sin
 ```python
 start_vllm("Qwen/Qwen2.5-Coder-32B-Instruct", tensor_parallel_size=2)
 ```
+
+### `base_url` works with any OpenAI-compatible server (not just vLLM)
+
+The `base_url` field on `ModelConfig` isn't vLLM-specific — it's how you point fastevolve at any server that speaks the OpenAI Chat Completions API. That means you can self-host with whichever engine you prefer and the library treats it as just another model in the ensemble:
+
+| Engine | Typical `base_url` | Notes |
+|---|---|---|
+| vLLM | `http://127.0.0.1:8000/v1` | Highest throughput on NVIDIA GPUs; what `start_vllm()` spawns. |
+| LM Studio | `http://localhost:1234/v1` | GUI desktop app, easy on macOS/Windows. |
+| llama.cpp server | `http://localhost:8080/v1` | CPU-friendly, GGUF quantization, runs anywhere. |
+| TGI (Hugging Face Text Generation Inference) | `http://localhost:8080/v1` | Production-grade serving, similar throughput to vLLM. |
+| SGLang | `http://localhost:30000/v1` | Optimized for structured generation and constrained decoding. |
+| Any OpenAI-compatible cloud endpoint | their published URL | Use the provider's `api_key` via the `OPENAI_API_KEY` env var. |
+
+You start the server however that engine's docs say to, then drop a `ModelConfig` into the ensemble:
+
+```python
+ModelConfig(name="my-served-model", provider="openai",
+            base_url="http://localhost:1234/v1",
+            temperature=0.5, weight=1.0, role="fast")
+```
+
+Mix and match freely — a llama.cpp CPU server for cheap iterations + a TGI GPU server for the deep model, for example. The adaptive router doesn't care which engine is behind each URL; it only cares which one produces fitness improvements.
 
 ## Run the demo
 
