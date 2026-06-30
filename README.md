@@ -190,19 +190,22 @@ Colab sessions are disconnected after ~90 min idle and the VM is wiped — set `
 
 vLLM is a high-throughput inference engine with continuous batching and paged attention — significantly faster than Ollama for sustained generation and multi-GPU setups. Use it when you have an A100 / L4 / H100 and care about throughput.
 
-**CUDA limitation (important).** vLLM ships pre-built wheels tied to specific CUDA versions and it is **impossible to make a single pin work for every GPU**. `fastevolve[vllm]` installs the PyPI default, which targets **CUDA 12.1** — this works on Colab Pro+ A100/L4 runtimes (currently CUDA 12.x) and most modern cloud GPUs. If your driver is on a different CUDA version, install vLLM yourself first with the matching wheel:
+**CUDA limitation (important).** vLLM ships pre-built wheels tied to specific CUDA versions and it is **impossible to make a single pin work for every GPU**. The PyPI default tracks the newest CUDA — currently CUDA 13 in vLLM ≥ 0.11. Colab and most cloud GPUs are still on **CUDA 12.x**, so on those environments you must pin an older vLLM:
 
 ```bash
-# Pick the line that matches your driver's CUDA version
-pip install vllm --extra-index-url https://download.pytorch.org/whl/cu118    # CUDA 11.8
-pip install vllm --extra-index-url https://download.pytorch.org/whl/cu124    # CUDA 12.4
-# then:
-uv add "fastevolve[vllm]"
+# Colab and most CUDA-12.x environments (use this in the example below):
+pip install "vllm<0.11"      # 0.10.x targets CUDA 12.4 and works on Colab
+
+# If your driver is on a specific older CUDA version (e.g. 11.8):
+pip install vllm --extra-index-url https://download.pytorch.org/whl/cu118
+
+# If you ARE on CUDA 13 (recent bare-metal install or H100 host with new drivers):
+pip install vllm           # latest, default
 ```
 
-vLLM is Linux-only (or Linux via WSL2). It does not work on Windows or macOS natively.
+The library logs the detected vLLM version, driver CUDA, and GPU on startup so any mismatch surfaces immediately — and `start_vllm` fast-fails with a `RuntimeError` if vLLM crashes before the server comes up.
 
-The library will log the detected vLLM version, driver CUDA, and GPU at startup so any mismatch surfaces immediately.
+vLLM is Linux-only (or Linux via WSL2). It does not work on Windows or macOS natively.
 
 The ensemble below runs **two different vLLM servers on the same GPU**: a small, fast Qwen for cheap exploration and a bigger Qwen-coder for hard cases. The adaptive router learns when to escalate. Each vLLM server is told to use ~40 % of GPU memory so they coexist on a single A100 40 GB.
 
@@ -210,8 +213,10 @@ The ensemble below runs **two different vLLM servers on the same GPU**: a small,
 
 ```python
 # 1. Pick an A100 / L4 / H100 GPU runtime: Runtime → Change runtime type → A100 GPU
-# 2. Install fastevolve with the vLLM extra (works on Colab's CUDA 12.x out of the box)
-!pip install -q "fastevolve[vllm]"
+# 2. Install fastevolve. Pin vLLM to a CUDA 12.x build — Colab is on CUDA 12.x,
+#    while the latest vLLM (0.11+) requires CUDA 13 and will fail with
+#    "libcudart.so.13: cannot open shared object file". 0.10.x targets CUDA 12.4.
+!pip install -q fastevolve "vllm<0.11"
 
 # 3. Start two vLLM OpenAI-compatible servers on different ports.
 #    `gpu_memory_utilization=0.4` lets both fit on one 40 GB A100 with KV-cache headroom.

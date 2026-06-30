@@ -13,6 +13,7 @@ then `uv add 'fastevolve[vllm]'` is a no-op verification step.
 import socket
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 from functools import cache
@@ -78,14 +79,30 @@ def start_vllm(model: str, *, host: str = "127.0.0.1", port: int = 8000,
            "--model", model, "--host", host, "--port", str(port)]
     for k, v in vllm_kwargs.items():
         cmd.extend([f"--{k.replace('_', '-')}", str(v)])
-    out = None if verbose else subprocess.DEVNULL
-    subprocess.Popen(cmd, stdout=out, stderr=out)
+    if verbose:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                text=True, bufsize=1)
+        def _tail():
+            assert proc.stdout is not None
+            for line in proc.stdout:
+                log.info("[vllm-out] %s", line.rstrip())
+        threading.Thread(target=_tail, daemon=True).start()
+    else:
+        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     started = time.time()
     deadline = started + wait
     last_log = started
     url = f"http://{host}:{port}/v1/models"
     while time.time() < deadline:
+        rc = proc.poll()
+        if rc is not None:
+            raise RuntimeError(
+                f"vLLM process exited with code {rc} before becoming ready. "
+                "Re-run with verbose=True to see the actual error from vLLM, or run "
+                f"`python -m vllm.entrypoints.openai.api_server --model {model} --port {port}` "
+                "in a shell cell to see startup logs directly."
+            )
         try:
             with urllib.request.urlopen(url, timeout=2) as r:
                 if r.status == 200:
